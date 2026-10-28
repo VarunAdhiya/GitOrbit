@@ -1,0 +1,74 @@
+name: gitorbit
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: gitorbit
+      POSTGRES_PASSWORD: gitorbit
+      POSTGRES_DB: gitorbit
+    ports: ['127.0.0.1:5432:5432']
+    volumes: ['pgdata:/var/lib/postgresql']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U gitorbit -d gitorbit']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7.4-alpine
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    ports: ['127.0.0.1:6379:6379']
+    volumes: ['redisdata:/data']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  migrate:
+    profiles: ['app']
+    build: { context: ., target: services }
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://gitorbit:gitorbit@postgres:5432/gitorbit
+      DIRECT_URL: postgresql://gitorbit:gitorbit@postgres:5432/gitorbit
+    command: ['npm', 'run', 'db:migrate']
+    depends_on:
+      postgres: { condition: service_healthy }
+  api:
+    profiles: ['app']
+    build: { context: ., target: services }
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://gitorbit:gitorbit@postgres:5432/gitorbit
+      REDIS_URL: redis://redis:6379
+      WEB_ORIGIN: http://localhost:3000
+    ports: ['127.0.0.1:4000:4000']
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    init: true
+    stop_grace_period: 30s
+  worker:
+    profiles: ['app']
+    build: { context: ., target: services }
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://gitorbit:gitorbit@postgres:5432/gitorbit
+      REDIS_URL: redis://redis:6379
+    command: ['npm', 'run', 'start:worker']
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    init: true
+    stop_grace_period: 90s
+  web:
+    profiles: ['app']
+    build: { context: ., target: web }
+    ports: ['127.0.0.1:3000:3000']
+    depends_on: [api]
+    init: true
+volumes:
+  pgdata:
+  redisdata:
