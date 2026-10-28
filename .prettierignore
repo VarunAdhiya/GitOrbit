@@ -1,0 +1,11 @@
+node_modules
+**/.next
+**/next-env.d.ts
+packages/database/generated
+package-lock.json
+skills-lock.json
+.agents
+README.md
+tmp
+test-results
+playwright-report

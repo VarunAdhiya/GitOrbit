@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated"
+}
+datasource db {
+  provider = "postgresql"
+}
+model Repository {
+  id                 String   @id @default(uuid()) @db.Uuid
+  source             String   @default("github")
+  externalId         String   @map("external_id")
+  owner              String
+  name               String
+  description        String?
+  sourceUrl          String   @map("source_url")
+  primaryLanguage    String?  @map("primary_language")
+  languages          String[] @default([])
+  stars              Int      @default(0)
+  forks              Int      @default(0)
+  topics             String[] @default([])
+  archived           Boolean  @default(false)
+  contributionUrl    String?  @map("contribution_url")
+  createdAtSource    DateTime @map("created_at_source") @db.Timestamptz(3)
+  lastPushedAt       DateTime? @map("last_pushed_at") @db.Timestamptz(3)
+  lastSyncedAt       DateTime @default(now()) @map("last_synced_at") @db.Timestamptz(3)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  issues             Issue[]
+  @@unique([source, externalId])
+  @@unique([source, owner, name])
+  @@index([archived, lastPushedAt])
+  @@index([lastSyncedAt, id])
+  @@index([primaryLanguage])
+  @@index([topics], type: Gin)
+  @@map("repositories")
+}
+model Issue {
+  id                 String @id @default(uuid()) @db.Uuid
+  source             String @default("github")
+  externalId         String @map("external_id")
+  repositoryId       String @map("repository_id") @db.Uuid
+  repository         Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  issueNumber        Int @map("issue_number")
+  title              String
+  description        String @default("")
+  sourceUrl          String @map("source_url")
+  labels             String[] @default([])
+  state              String @default("open")
+  assigned           Boolean @default(false)
+  inProgress         Boolean @default(false) @map("in_progress")
+  difficulty         String @default("unknown")
+  difficultyEvidence String @default("") @map("difficulty_evidence")
+  relevantSkills     String[] @default([]) @map("relevant_skills")
+  createdAtSource    DateTime @map("created_at_source") @db.Timestamptz(3)
+  updatedAtSource    DateTime @map("updated_at_source") @db.Timestamptz(3)
+  lastSyncedAt       DateTime @default(now()) @map("last_synced_at") @db.Timestamptz(3)
+  stale              Boolean @default(false)
+  programs           IssueProgram[]
+  @@unique([source, externalId])
+  @@unique([repositoryId, issueNumber])
+  @@index([state, stale, updatedAtSource, id])
+  @@index([state, stale, createdAtSource, id])
+  @@index([state, lastSyncedAt, id])
+  @@index([difficulty])
+  @@index([labels], type: Gin)
+  @@index([relevantSkills], type: Gin)
+  @@map("issues")
+}
+model Skill {
+  id             String @id @default(uuid()) @db.Uuid
+  name           String
+  category       String
+  normalizedName String @unique @map("normalized_name")
+  profiles       ProfileSkill[]
+  @@map("skills")
+}
+model UserProfile {
+  id                 String @id @default(uuid()) @db.Uuid
+  anonymousSessionId String @unique @map("anonymous_session_id")
+  experienceLevel    String @default("unknown") @map("experience_level")
+  experienceInferred Boolean @default(true) @map("experience_inferred")
+  experienceSummary  String[] @default([]) @map("experience_summary")
+  interests          String[] @default([])
+  preferredLanguages String[] @default([]) @map("preferred_languages")
+  desiredDifficulty  String @default("any") @map("desired_difficulty")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt          DateTime @map("expires_at") @db.Timestamptz(3)
+  skills             ProfileSkill[]
+  @@index([expiresAt])
+  @@map("user_profiles")
+}
+model ProfileSkill {
+  profileId String @map("profile_id") @db.Uuid
+  skillId   String @map("skill_id") @db.Uuid
+  profile   UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  skill     Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  confidence Float
+  source     String
+  @@id([profileId, skillId])
+  @@index([skillId])
+  @@map("profile_skills")
+}
+model Program {
+  id         String @id @default(uuid()) @db.Uuid
+  name       String @unique
+  sourceUrl  String @map("source_url")
+  metadata   Json @default("{}")
+  verifiedAt DateTime? @map("verified_at") @db.Timestamptz(3)
+  issues     IssueProgram[]
+  @@map("programs")
+}
+model IssueProgram {
+  issueId     String @map("issue_id") @db.Uuid
+  programId   String @map("program_id") @db.Uuid
+  evidenceUrl String @map("evidence_url")
+  issue       Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  program     Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  @@id([issueId, programId])
+  @@index([programId])
+  @@map("issue_programs")
+}
+model IngestionRun {
+  id             String @id @default(uuid()) @db.Uuid
+  jobId          String @map("job_id")
+  jobType        String @map("job_type")
+  source         String @default("github")
+  status         String
+  processedCount Int @default(0) @map("processed_count")
+  failedCount    Int @default(0) @map("failed_count")
+  startedAt      DateTime @default(now()) @map("started_at") @db.Timestamptz(3)
+  finishedAt     DateTime? @map("finished_at") @db.Timestamptz(3)
+  errorSummary   String? @map("error_summary")
+  @@index([startedAt])
+  @@index([jobType, status, finishedAt])
+  @@map("ingestion_runs")
+}
+model SyncCursor {
+  key       String @id
+  timestamp DateTime @db.Timestamptz(3)
+  @@map("sync_cursors")
+}
