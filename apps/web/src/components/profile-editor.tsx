@@ -13,9 +13,11 @@ import {
   X,
 } from 'lucide-react';
 import { categorySchema, normalizeSkill, type Profile, type ProfileInput } from '@gitorbit/shared';
-import { api, ApiClientError, dateLabel } from '@/lib/api';
-import { LoadingState } from './states';
-type Config = { aiConfigured: boolean; aiProvider: string; profileTtlHours: number };
+import { api, ApiClientError } from '@/lib/api';
+import { ErrorState, LoadingState } from './states';
+import { useAuth } from './auth-provider';
+import Link from 'next/link';
+type Config = { aiConfigured: boolean; maxPdfMb?: number };
 const blank: ProfileInput = {
   skills: [],
   experienceLevel: 'unknown',
@@ -31,17 +33,42 @@ const categories: Record<string, string> = {
   domains: 'Domain',
 };
 export function ProfileEditor() {
+  const { user, loading, error } = useAuth();
+  if (loading) return <LoadingState label="Checking your sign-in…" />;
+  if (error) return <ErrorState message={error} retry={() => window.location.reload()} />;
+  if (!user)
+    return (
+      <div className="empty-state">
+        <span className="empty-icon">
+          <ShieldCheck size={28} />
+        </span>
+        <h1>Sign in to build your profile.</h1>
+        <p>
+          Upload your resume or add your skills after signing in. Your profile stays connected to
+          your account.
+        </p>
+        <Link href="/sign-in" className="button primary">
+          Sign in to continue <ArrowRight size={17} />
+        </Link>
+        <Link href="/explore" className="text-button">
+          Explore opportunities
+        </Link>
+      </div>
+    );
+  return <SignedInProfileEditor key={user.id} />;
+}
+function SignedInProfileEditor() {
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [form, setForm] = useState<ProfileInput>(blank);
   const [config, setConfig] = useState<Config | null>(null);
+  const maxPdfMb = config?.maxPdfMb ?? 4;
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'upload' | 'save' | 'delete' | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [consent, setConsent] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [skill, setSkill] = useState('');
   const [category, setCategory] =
@@ -59,8 +86,10 @@ export function ProfileEditor() {
     }
     Promise.allSettled([
       api<Config>('/config', { signal: controller.signal }).then(setConfig),
-      api<Profile>('/profiles/current', { signal: controller.signal })
-        .then(load)
+      api<Profile | null>('/profiles/current', { signal: controller.signal })
+        .then((saved) => {
+          if (saved) load(saved);
+        })
         .catch((e) => {
           if (!(e instanceof ApiClientError && [401, 404].includes(e.status))) throw e;
         }),
@@ -81,14 +110,14 @@ export function ProfileEditor() {
       setError('Please choose a PDF resume.');
       return;
     }
-    if (selected.size > 5 * 1024 * 1024) {
-      setError('Your PDF must be 5 MB or smaller.');
+    if (selected.size > maxPdfMb * 1024 * 1024) {
+      setError(`Your PDF must be ${maxPdfMb} MB or smaller.`);
       return;
     }
     setFile(selected);
   }
   async function upload() {
-    if (!file || !consent) return;
+    if (!file) return;
     setBusy('upload');
     setError('');
     setNotice('');
@@ -97,7 +126,6 @@ export function ProfileEditor() {
       body.append('resume', file);
       const result = await api<Profile>('/resumes/analyze', {
         method: 'POST',
-        headers: { 'X-Resume-Consent': 'true' },
         body,
       });
       setProfile(result);
@@ -268,7 +296,9 @@ export function ProfileEditor() {
                   {file ? 'Choose another file' : 'Choose PDF'}
                   <Plus size={15} />
                 </button>
-                <span className="fine-print">Text-based PDF · Up to 5 MB · Maximum 20 pages</span>
+                <span className="fine-print">
+                  Text-based PDF · Up to {maxPdfMb} MB · Maximum 20 pages
+                </span>
               </div>
               {config && !config.aiConfigured ? (
                 <div className="alert neutral">
@@ -276,23 +306,9 @@ export function ProfileEditor() {
                   profile manually below.
                 </div>
               ) : null}
-              <label className="consent">
-                <input
-                  type="checkbox"
-                  checked={consent}
-                  onChange={(e) => setConsent(e.target.checked)}
-                  disabled={Boolean(busy)}
-                />
-                <span>
-                  I agree to send my resume text to{' '}
-                  <strong>{config?.aiProvider || 'the configured AI provider'}</strong> for skill
-                  extraction. GitOrbit won’t save my raw resume. The provider’s retention policy
-                  applies.
-                </span>
-              </label>
               <button
                 className="button dark"
-                disabled={!file || !consent || !config?.aiConfigured || Boolean(busy)}
+                disabled={!file || !config?.aiConfigured || Boolean(busy)}
                 onClick={upload}
               >
                 {busy === 'upload' ? (
@@ -469,7 +485,7 @@ export function ProfileEditor() {
               <section className="profile-delete">
                 <div>
                   <h3>Your profile, your control.</h3>
-                  <p>Expires {dateLabel(profile.expiresAt)}. You can delete it now.</p>
+                  <p>Saved to your account across visits. You can delete it anytime.</p>
                 </div>
                 {confirmDelete ? (
                   <div className="delete-confirm">
@@ -506,12 +522,13 @@ export function ProfileEditor() {
                 Not a paper trail.
               </h3>
               <p>
-                No account to create. No raw resume to store. Just the skills you choose to share.
+                No raw resume to store. Just the skills you choose to share. Your profile is saved
+                to your account.
               </p>
               <ul>
                 <li>
                   <Check size={15} />
-                  Private anonymous session
+                  Private account profile
                 </li>
                 <li>
                   <Check size={15} />
@@ -519,7 +536,7 @@ export function ProfileEditor() {
                 </li>
                 <li>
                   <Check size={15} />
-                  Auto-expires in {config?.profileTtlHours || 24} hours
+                  Available across visits and devices
                 </li>
                 <li>
                   <Check size={15} />

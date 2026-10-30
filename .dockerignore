@@ -8,3 +8,9 @@ node_modules
 tmp
 test-results
 playwright-report
+.vercel
+.12ui
+coverage
+packages/database/generated
+*.tsbuildinfo
+*.log

@@ -11,12 +11,16 @@ export function rankOpportunity(
   profile: ProfileInput,
   now = new Date(),
 ): Match {
-  const profileKeys = new Set(profile.skills.map((s) => skillKey(s.name)));
-  const explicit = issue.relevantSkills.filter((s) => profileKeys.has(skillKey(s)));
+  // Git is baseline contribution tooling, not a signal of issue-specific fit.
+  const profileKeys = new Set(
+    profile.skills.map((s) => skillKey(s.name)).filter((s) => s !== 'git'),
+  );
+  const relevantSkills = issue.relevantSkills.filter((s) => skillKey(s) !== 'git');
+  const explicit = relevantSkills.filter((s) => profileKeys.has(skillKey(s)));
   const context = issue.repository.languages.filter(
     (s) => profileKeys.has(skillKey(s)) && !explicit.some((x) => skillKey(x) === skillKey(s)),
   );
-  const requiredCount = issue.relevantSkills.length;
+  const requiredCount = relevantSkills.length;
   const skillScore = requiredCount
     ? Math.round((100 * explicit.length) / requiredCount)
     : context.length
@@ -56,7 +60,7 @@ export function rankOpportunity(
       activityScore * WEIGHTS.activity +
       interestScore * WEIGHTS.interest,
   );
-  const uncertainPrerequisites = issue.relevantSkills.filter((s) => !profileKeys.has(skillKey(s)));
+  const uncertainPrerequisites = relevantSkills.filter((s) => !profileKeys.has(skillKey(s)));
   if (!requiredCount)
     uncertainPrerequisites.push('Issue-specific technical requirements are not confirmed.');
   const explanation = explicit.length

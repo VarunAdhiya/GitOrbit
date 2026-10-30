@@ -2,6 +2,8 @@
 
 An open-source opportunity discovery app built from the specification below.
 
+**Deploy:** [Vercel deployment guide](docs/DEPLOYMENT.md) covers the website, API, ingestion worker, Supabase, and hosted Redis.
+
 **Start here:** [Setup and running instructions](docs/SETUP.md) · [Architecture and API](docs/ARCHITECTURE.md) · [Verification results](docs/VERIFICATION.md)
 
 ```sh
@@ -15,6 +17,8 @@ npm run dev
 ```
 
 Open http://localhost:3000. Web, API, and BullMQ workers run as separate processes. The catalog is populated by real GitHub ingestion, not sample data. Use `npm run ingestion:trigger -- discover-issues --backfill` to enqueue the initial backfill. See the setup guide for Supabase, privacy, AI configuration, and testing.
+
+The UI defaults to dark mode with a persistent theme toggle. **Google sign-in is required** to upload a resume, create or manage a profile, and get personalized recommendations. Visitors can browse public opportunities without signing in. Follow [Google sign-in setup](docs/SETUP.md#google-sign-in) to enable the Supabase provider and configure both OAuth redirects. These additions extend the original MVP specification below.
 
 ---
 

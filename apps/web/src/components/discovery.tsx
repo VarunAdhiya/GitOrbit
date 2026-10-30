@@ -36,7 +36,9 @@ export function Discovery({ personalized = false }: { personalized?: boolean }) 
     api<OpportunityPage>(`/${personalized ? 'recommendations' : 'opportunities'}?${query}`, {
       signal: controller.signal,
     })
-      .then(setData)
+      .then((result) => {
+        if (!controller.signal.aborted) setData(result);
+      })
       .catch((e) => {
         if (!controller.signal.aborted) setError(e);
       })
@@ -48,7 +50,9 @@ export function Discovery({ personalized = false }: { personalized?: boolean }) 
   useEffect(() => {
     const controller = new AbortController();
     api<Facets>('/opportunities/facets', { signal: controller.signal })
-      .then(setFacets)
+      .then((result) => {
+        if (!controller.signal.aborted) setFacets(result);
+      })
       .catch(() => {});
     return () => controller.abort();
   }, [revision]);
@@ -68,6 +72,7 @@ export function Discovery({ personalized = false }: { personalized?: boolean }) 
   }
   const activeFilters = [...params.entries()].filter(([key]) => !['page', 'sort'].includes(key));
   const needsProfile = error && ['PROFILE_REQUIRED', 'PROFILE_NOT_FOUND'].includes(error.code);
+  const needsSignIn = error?.code === 'AUTH_REQUIRED';
   return (
     <>
       <div className="page-heading">
@@ -158,7 +163,7 @@ export function Discovery({ personalized = false }: { personalized?: boolean }) 
       </div>
       <div className={`filter-bar ${showFilters ? 'expanded' : ''}`}>
         <label>
-          Language
+          Primary language
           <select
             aria-label="Programming language"
             value={params.get('language') || ''}
@@ -235,7 +240,7 @@ export function Discovery({ personalized = false }: { personalized?: boolean }) 
             >
               <option value="">All repositories</option>
               {facets?.repositories.map((r) => (
-                <option key={r.id} value={r.name}>
+                <option key={r.id} value={`${r.owner}/${r.name}`}>
                   {r.owner}/{r.name}
                 </option>
               ))}
@@ -295,41 +300,45 @@ export function Discovery({ personalized = false }: { personalized?: boolean }) 
             {personalized ? <option value="match">Highest match</option> : null}
             <option value="updated">Recently updated</option>
             <option value="created">Recently created</option>
+            <option value="stars">Most stars</option>
+            <option value="forks">Most forks</option>
           </select>
         </label>
       </div>
       {loading ? (
         <LoadingState />
-      ) : needsProfile ? (
+      ) : needsProfile || needsSignIn ? (
         <div className="empty-state">
           <span className="empty-icon">
             <Sparkles size={28} />
           </span>
           <h2>Your next chapter starts with you.</h2>
           <p>
-            Add a few skills or upload your resume. We’ll connect the dots between what you know and
-            where you can help.
+            {needsSignIn
+              ? 'Sign in to create your profile and see opportunities matched to your skills.'
+              : 'Add a few skills or upload your resume to find opportunities that fit you.'}
           </p>
-          <Link className="button primary" href="/resume">
-            Build my profile <ArrowRight size={17} />
+          <Link className="button primary" href={needsSignIn ? '/sign-in' : '/resume'}>
+            {needsSignIn ? 'Sign in to continue' : 'Build my profile'} <ArrowRight size={17} />
           </Link>
-          <span className="fine-print">No signup. Just your skills.</span>
+          <span className="fine-print">Your skills. Your next contribution.</span>
         </div>
       ) : error ? (
         <ErrorState message={error.message} retry={() => setRevision((r) => r + 1)} />
       ) : data?.items.length ? (
         <>
+          {data.rankingLimited ? (
+            <p className="data-note">
+              Highest match ranks the {data.rankedCandidates?.toLocaleString()} most recently
+              updated issues in this search. Use filters to narrow the results. Star and fork
+              sorting covers every matching issue.
+            </p>
+          ) : null}
           <div className="opportunity-grid">
             {data.items.map((item) => (
               <OpportunityCard key={item.id} item={item} />
             ))}
           </div>
-          {data.rankingLimited ? (
-            <p className="data-note">
-              Matching considers the 1,000 most recently updated issues in this search. Narrow your
-              filters to rank a more focused set.
-            </p>
-          ) : null}
           <nav className="pagination" aria-label="Opportunity pages">
             <span>
               Page {data.page} of {data.pages}

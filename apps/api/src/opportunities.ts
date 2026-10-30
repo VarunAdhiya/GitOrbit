@@ -28,7 +28,10 @@ export function opportunityWhere(
         { repository: { name: { contains: filters.q, mode: 'insensitive' } } },
       ],
     });
-  if (filters.language) and.push({ repository: { languages: { has: filters.language } } });
+  if (filters.language)
+    and.push({
+      repository: { primaryLanguage: { equals: filters.language, mode: 'insensitive' } },
+    });
   if (filters.skill) and.push({ relevantSkills: { has: filters.skill } });
   if (filters.difficulty !== 'any') and.push({ difficulty: filters.difficulty });
   if (filters.activity !== 'any')
@@ -39,7 +42,15 @@ export function opportunityWhere(
         },
       },
     });
-  if (filters.repository)
+  if (filters.repository.includes('/')) {
+    const [owner, name] = filters.repository.split('/');
+    and.push({
+      repository: {
+        owner: { equals: owner, mode: 'insensitive' },
+        name: { equals: name, mode: 'insensitive' },
+      },
+    });
+  } else if (filters.repository)
     and.push({
       OR: [
         { repository: { name: { contains: filters.repository, mode: 'insensitive' } } },
@@ -82,6 +93,9 @@ export async function listOpportunities(
   }
   const total = await db.issue.count({ where });
   const orderBy: Prisma.IssueOrderByWithRelationInput[] = [
+    ...(filters.sort === 'stars' || filters.sort === 'forks'
+      ? [{ repository: { [filters.sort]: 'desc' as const } }]
+      : []),
     { [filters.sort === 'created' ? 'createdAtSource' : 'updatedAtSource']: 'desc' },
     { id: 'asc' },
   ];
@@ -96,7 +110,12 @@ export async function listOpportunities(
     const ranked = rows
       .map(serializeOpportunity)
       .map((item) => ({ ...item, match: rankOpportunity(item, profile) }))
-      .sort((a, b) => b.match.score - a.match.score || a.id.localeCompare(b.id));
+      .sort(
+        (a, b) =>
+          b.match.score - a.match.score ||
+          Date.parse(b.updatedAtSource) - Date.parse(a.updatedAtSource) ||
+          a.id.localeCompare(b.id),
+      );
     return {
       items: ranked.slice((filters.page - 1) * filters.limit, filters.page * filters.limit),
       total,

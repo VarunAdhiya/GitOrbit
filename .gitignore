@@ -12,3 +12,4 @@ packages/database/generated/
 tmp/
 *.tsbuildinfo
 *.log
+.vercel/

@@ -1,0 +1,16 @@
+.env
+.env.*
+.git
+.agents
+.12ui
+node_modules
+**/node_modules
+**/.next
+tmp
+test-results
+playwright-report
+coverage
+*.log
+*.tsbuildinfo
+packages/database/generated
+!.dockerignore

@@ -17,6 +17,46 @@ describe('transparent recommendation ranking', () => {
     expect(result.skillScore).toBe(0);
     expect(result.uncertainPrerequisites).toContain('Rust');
   });
+  it.each(['Git', 'git', ' GIT '])(
+    'ignores %s in scores, match reasons and missing prerequisites',
+    (name) => {
+      const now = new Date();
+      const baseline = rankOpportunity(opportunity, profile, now);
+      const withGit = { ...opportunity, relevantSkills: [...opportunity.relevantSkills, name] };
+      expect(rankOpportunity(withGit, profile, now)).toEqual(baseline);
+      expect(
+        rankOpportunity(
+          withGit,
+          {
+            ...profile,
+            skills: [...profile.skills, { name, category: 'tools', confidence: 1, source: 'user' }],
+          },
+          now,
+        ),
+      ).toEqual(baseline);
+    },
+  );
+  it('does not give a Git-only profile a skill match', () => {
+    const result = rankOpportunity(
+      {
+        ...opportunity,
+        relevantSkills: ['Git'],
+        repository: { ...opportunity.repository, languages: [] },
+      },
+      { ...profile, skills: [{ name: 'Git', category: 'tools', confidence: 1, source: 'user' }] },
+    );
+    expect(result.skillScore).toBe(0);
+    expect(result.matchingSkills).toEqual([]);
+    expect(result.explanation).toContain('No confirmed skill overlap');
+    expect(result.uncertainPrerequisites).not.toContain('Git');
+  });
+  it('still uses genuine repository language context when only Git is mentioned in the issue', () => {
+    const result = rankOpportunity({ ...opportunity, relevantSkills: ['Git'] }, profile);
+    expect(result.skillScore).toBe(45);
+    expect(result.matchingSkills).toEqual([]);
+    expect(result.explanation).toContain('TypeScript');
+    expect(result.explanation).not.toContain('Git');
+  });
   it('does not invent difficulty', () =>
     expect(
       rankOpportunity({ ...opportunity, difficulty: 'unknown' }, profile).difficultyScore,

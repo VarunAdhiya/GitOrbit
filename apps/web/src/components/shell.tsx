@@ -11,6 +11,8 @@ import {
   GitBranch,
 } from 'lucide-react';
 import { Brand, OrbitMark } from './brand';
+import { ThemeToggle } from './theme-toggle';
+import { AccountControl } from './account-control';
 const links = [
   { href: '/explore', label: 'Explore opportunities', icon: Compass },
   { href: '/recommendations', label: 'For you', icon: Sparkles },
@@ -70,9 +72,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   : 'Discover'}
             </span>
           </div>
-          <Link className="topbar-link" href="/resume">
-            Find your match <ArrowUpRight size={15} />
-          </Link>
+          <div className="header-actions">
+            <ThemeToggle />
+            <AccountControl />
+          </div>
         </header>
         <main id="main" className="workspace-main">
           {children}

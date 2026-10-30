@@ -3,6 +3,8 @@ const config: NextConfig = {
   transpilePackages: ['@gitorbit/shared'],
   poweredByHeader: false,
   async rewrites() {
+    // Vercel Services routes /api directly to Express on the same domain.
+    if (process.env.VERCEL === '1') return [];
     return [
       {
         source: '/api/:path*',

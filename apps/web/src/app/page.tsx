@@ -13,6 +13,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Brand, OrbitMark } from '@/components/brand';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { AccountControl } from '@/components/account-control';
 export default function HomePage() {
   return (
     <div className="landing">
@@ -22,9 +24,10 @@ export default function HomePage() {
           <Link href="/explore">Explore opportunities</Link>
           <Link href="#how-it-works">How it works</Link>
         </nav>
-        <Link href="/resume" className="button dark small">
-          Find my match <ArrowUpRight size={15} />
-        </Link>
+        <div className="header-actions">
+          <ThemeToggle />
+          <AccountControl />
+        </div>
       </header>
       <main id="main">
         <section className="hero">
@@ -52,7 +55,7 @@ export default function HomePage() {
             </div>
             <div className="hero-reassurance">
               <span>
-                <Check size={14} /> No signup needed
+                <Check size={14} /> Free to explore
               </span>
               <span>
                 <Check size={14} /> Always open source
@@ -167,8 +170,8 @@ export default function HomePage() {
             <ShieldCheck size={22} />
             <h3>Your resume stays yours.</h3>
             <p>
-              Raw files aren’t saved. AI processing requires your consent. Delete your anonymous
-              profile whenever you want.
+              Raw files aren’t saved. Sign in to create your profile and delete it whenever you
+              want.
             </p>
           </div>
           <div>

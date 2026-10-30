@@ -49,9 +49,9 @@ export const filtersSchema = z
     skill: z.string().trim().max(60).default(''),
     difficulty: z.enum(['any', 'beginner', 'intermediate', 'advanced', 'unknown']).default('any'),
     activity: z.enum(['any', 'month', 'quarter']).default('any'),
-    repository: z.string().trim().max(100).default(''),
+    repository: z.string().trim().max(180).default(''),
     program: z.string().uuid().optional(),
-    sort: z.enum(['updated', 'created', 'match']).default('updated'),
+    sort: z.enum(['updated', 'created', 'match', 'stars', 'forks']).default('updated'),
     page: z.coerce.number().int().min(1).max(1000).default(1),
     limit: z.coerce.number().int().min(1).max(30).default(12),
     available: z.enum(['true', 'false']).default('false'),
@@ -87,7 +87,7 @@ export type Profile = ProfileInput & {
   id: string;
   experienceInferred: boolean;
   experienceSummary: string[];
-  expiresAt: string;
+  expiresAt: string | null;
 };
 export type Filters = z.infer<typeof filtersSchema>;
 
@@ -262,7 +262,7 @@ export const profileResponseSchema = profileInputSchema.extend({
   id: z.string().uuid(),
   experienceInferred: z.boolean(),
   experienceSummary: z.array(z.string().max(240)).max(6),
-  expiresAt: z.string().datetime(),
+  expiresAt: z.string().datetime().nullable(),
 });
 const scoreSchema = z.number().min(0).max(100);
 export const matchResponseSchema = z.object({

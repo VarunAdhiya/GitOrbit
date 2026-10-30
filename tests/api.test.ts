@@ -15,6 +15,18 @@ const env = readEnv({
   ADMIN_TOKEN: 'test-admin-token-with-at-least-32-characters',
 });
 const logger = pino({ level: 'silent' });
+const signedInAuth = () => ({
+  getUser: async () => ({
+    id: '11111111-1111-4111-8111-111111111111',
+    name: 'Test user',
+    email: null,
+  }),
+  start: async () => '',
+  exchange: async () => {
+    throw new Error('unused');
+  },
+  signOut: async () => {},
+});
 function fakeDatabase() {
   return {
     userProfile: { findFirst: vi.fn().mockResolvedValue(null), delete: vi.fn() },
@@ -22,6 +34,26 @@ function fakeDatabase() {
   };
 }
 describe('anonymous access and API validation', () => {
+  it('requires sign-in even with a legacy guest profile cookie', async () => {
+    const app = createApp({ db: fakeDatabase() as unknown as PrismaClient, env, logger });
+    for (const token of ['', 'a'.repeat(64)]) {
+      const result = await request(app)
+        .get('/api/v1/profiles/current')
+        .set('Cookie', `gitorbit_session=${token}`);
+      expect(result.status).toBe(401);
+      expect(result.body.error.code).toBe('AUTH_REQUIRED');
+    }
+  });
+  it('does not disguise database failures as an empty profile', async () => {
+    const db = fakeDatabase();
+    db.userProfile.findFirst.mockRejectedValue(new Error('Database unavailable'));
+    const app = createApp({ db: db as unknown as PrismaClient, env, logger, auth: signedInAuth });
+    const result = await request(app)
+      .get('/api/v1/profiles/current')
+      .set('Cookie', `gitorbit_session=${'a'.repeat(64)}`);
+    expect(result.status).toBe(503);
+    expect(result.body.error.code).toBe('SERVICE_UNAVAILABLE');
+  });
   it('requires a private session credential, not a public UUID', async () => {
     const db = fakeDatabase();
     const app = createApp({ db: db as unknown as PrismaClient, env, logger });
@@ -40,6 +72,7 @@ describe('anonymous access and API validation', () => {
       expect.objectContaining({
         where: {
           anonymousSessionId: sessionHash('a'.repeat(64)),
+          authUserId: null,
           id: 'other-id',
           expiresAt: { gt: expect.any(Date) },
         },
@@ -48,7 +81,7 @@ describe('anonymous access and API validation', () => {
   });
   it('rejects forged cross-origin mutations', async () => {
     const db = fakeDatabase();
-    const app = createApp({ db: db as unknown as PrismaClient, env, logger });
+    const app = createApp({ db: db as unknown as PrismaClient, env, logger, auth: signedInAuth });
     expect(
       (
         await request(app)
@@ -79,13 +112,30 @@ describe('anonymous access and API validation', () => {
     expect(result.body.error.code).toBe('VALIDATION_ERROR');
     expect(db.issue.findMany).not.toHaveBeenCalled();
   });
-  it('requires explicit consent before processing a resume', async () => {
+  it('requires sign-in before processing a resume', async () => {
     const extract = vi.fn();
     const app = createApp({ db: fakeDatabase() as unknown as PrismaClient, env, logger, extract });
     expect((await request(app).post('/api/v1/resumes/analyze').set('X-GitOrbit', '1')).status).toBe(
-      400,
+      401,
     );
     expect(extract).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['post', '/api/v1/profiles'],
+    ['patch', '/api/v1/profiles/11111111-1111-4111-8111-111111111111'],
+    ['delete', '/api/v1/profiles/11111111-1111-4111-8111-111111111111'],
+    ['get', '/api/v1/recommendations'],
+  ] as const)('rejects unsigned %s %s before accessing profile data', async (method, path) => {
+    const db = fakeDatabase();
+    const app = createApp({ db: db as unknown as PrismaClient, env, logger });
+    const pending = request(app)[method](path);
+    const result = await pending
+      .set('X-GitOrbit', '1')
+      .set('Cookie', `gitorbit_session=${'a'.repeat(64)}`)
+      .send(profile);
+    expect(result.status).toBe(401);
+    expect(result.body.error.code).toBe('AUTH_REQUIRED');
+    expect(db.userProfile.findFirst).not.toHaveBeenCalled();
   });
   it('returns consistent JSON errors on unknown routes', async () => {
     const app = createApp({ db: fakeDatabase() as unknown as PrismaClient, env, logger });
@@ -144,5 +194,19 @@ describe('filtering and stable pagination', () => {
       profile,
     );
     expect(JSON.stringify(db.issue.findMany.mock.calls[0])).toContain('hasSome');
+  });
+  it('uses the selected primary language instead of implicit profile preferences', async () => {
+    const db = fakeDatabase();
+    await listOpportunities(
+      db as unknown as PrismaClient,
+      filtersSchema.parse({ language: 'Python', sort: 'match' }),
+      48,
+      profile,
+    );
+    const query = db.issue.findMany.mock.calls[0][0];
+    expect(query.where.AND).toContainEqual({
+      repository: { primaryLanguage: { equals: 'Python', mode: 'insensitive' } },
+    });
+    expect(JSON.stringify(query)).not.toContain('hasSome');
   });
 });

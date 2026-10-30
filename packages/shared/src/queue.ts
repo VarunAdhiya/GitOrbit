@@ -16,6 +16,33 @@ export function redisConnection(url: string, worker = false) {
     retryStrategy: (times) => Math.min(times * 500, 10000),
   });
 }
+// API connections fail fast instead of buffering requests during an outage. Wait for
+// the initial handshake before RedisStore starts loading its Lua scripts.
+export function waitForRedis(redis: Redis, timeoutMs = 10000): Promise<void> {
+  if (redis.status === 'ready') return Promise.resolve();
+  if (redis.status === 'end') return Promise.reject(new Error('Redis connection is closed.'));
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer);
+      redis.off('ready', ready);
+      redis.off('error', failed);
+      redis.off('end', failed);
+    };
+    const ready = () => {
+      cleanup();
+      resolve();
+    };
+    const failed = () => {
+      cleanup();
+      reject(new Error('Redis is unavailable. Start Redis and check REDIS_URL.'));
+    };
+    const timer = setTimeout(failed, timeoutMs);
+    redis.once('ready', ready);
+    redis.once('error', failed);
+    redis.once('end', failed);
+    if (redis.status === 'wait') void redis.connect().catch(failed);
+  });
+}
 export function createQueue(url: string, name = QUEUE_NAME) {
   return new Queue<JobPayload>(name, {
     connection: { url, maxRetriesPerRequest: 1, enableOfflineQueue: false },

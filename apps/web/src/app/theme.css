@@ -1,0 +1,447 @@
+/* Shared theme tokens. Dark is the server-rendered default; the saved preference
+   is applied before paint by the root layout. */
+:root {
+  color-scheme: dark;
+  --paper: #101012;
+  --surface: #19191c;
+  --raised: #232326;
+  --ink: #f5f5f6;
+  --muted: #b3b3bc;
+  --line: #343439;
+  --primary: #f5f5f6;
+  --primary-hover: #dedee3;
+  --feature-bg: #19191c;
+  --highlight: #f5ad5b;
+  --on-accent: #141416;
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+  --paper: #f8f9f6;
+  --surface: #fff;
+  --raised: #edf2e7;
+  --ink: #242c28;
+  --muted: #65715c;
+  --line: #e2e6df;
+  --primary: #153f35;
+  --primary-hover: #10372e;
+  --feature-bg: #153f35;
+  --highlight: #d9efb7;
+  --on-accent: #fff;
+}
+/* Native select popups need explicit colors on Windows, including when the
+   closed control has a transparent background (such as the sort dropdown). */
+select {
+  color-scheme: inherit;
+}
+select option,
+select optgroup {
+  background-color: var(--raised);
+  color: var(--ink);
+}
+::selection {
+  background: var(--highlight);
+  color: light-dark(#153f35, #141416);
+}
+.button.primary,
+.button.dark {
+  background: var(--primary);
+  color: var(--on-accent);
+}
+.button.primary:hover,
+.button.dark:hover {
+  background: light-dark(#245446, #dedee3);
+}
+.button.lime {
+  color: light-dark(#153f35, #141416);
+}
+.button.secondary:hover {
+  background: var(--raised);
+}
+.hero {
+  background: light-dark(#153f35, #19191c);
+}
+.node-pr {
+  background: light-dark(#d7e9b9, #f5ad5b);
+  color: light-dark(#2e4b36, #141416);
+}
+.node-pr svg {
+  color: light-dark(#486640, #141416);
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.theme-toggle {
+  width: 40px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.theme-toggle:hover {
+  background: var(--raised);
+  color: var(--ink);
+}
+.account-loading {
+  width: 80px;
+  height: 36px;
+  border-radius: 6px;
+  background: var(--raised);
+}
+.account-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+.account-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+}
+.account-name {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--primary);
+  font-family: var(--serif);
+  font-size: 18px;
+}
+.account-error {
+  position: absolute;
+  z-index: 30;
+  top: 48px;
+  right: 0;
+  width: 240px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ink);
+}
+.profile-sign-in {
+  margin-top: 23px;
+  white-space: normal;
+}
+.sign-in-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.sign-in-header {
+  padding: 28px 6%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sign-in-main {
+  position: relative;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 36px 20px 60px;
+  overflow: hidden;
+  isolation: isolate;
+}
+.sign-in-orbit {
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 45%;
+  transform: translate(-50%, -50%);
+  width: min(900px, 170vw);
+  height: min(900px, 170vw);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  opacity: 0.45;
+}
+.sign-in-orbit::before,
+.sign-in-orbit::after {
+  content: '';
+  position: absolute;
+  inset: 9%;
+  border: 1px dashed var(--line);
+  border-radius: 50%;
+}
+.sign-in-orbit::after {
+  inset: 20%;
+  border-style: solid;
+}
+.sign-in-orbit > svg {
+  position: absolute;
+  top: 13%;
+  left: 13%;
+  width: 42px;
+  height: 42px;
+  color: var(--primary);
+}
+.sign-in-card {
+  width: 100%;
+  max-width: 450px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 38px;
+  box-shadow: 0 20px 80px #00000015;
+}
+.sign-in-symbol {
+  width: 50px;
+  height: 50px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--primary);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  margin-bottom: 26px;
+}
+.sign-in-card .eyebrow {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 1.2px;
+}
+.sign-in-card h1 {
+  font: 42px/1.12 var(--serif);
+  letter-spacing: -1.3px;
+  margin: 16px 0;
+  white-space: pre-line;
+}
+.sign-in-card > p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.sign-in-card .alert {
+  margin: 20px 0 0;
+}
+.sign-in-button {
+  width: 100%;
+  margin-top: 27px;
+  min-height: 48px;
+}
+.google-button {
+  background: light-dark(#fff, #f4f4f5);
+  color: #202024;
+  border: 1px solid light-dark(#dadfd6, #f4f4f5);
+  font-size: 13px;
+}
+.google-button:hover {
+  background: light-dark(#e6e9e1, #dedee3);
+}
+.sign-in-benefits {
+  display: grid;
+  gap: 12px;
+  padding: 25px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.sign-in-benefits > span {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.sign-in-benefits svg {
+  color: var(--primary);
+}
+.sign-in-card .sign-in-privacy {
+  font-size: 11px;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.sign-in-guest {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 12px;
+  margin-top: 28px;
+  color: var(--primary);
+}
+.sign-in-footer {
+  text-align: center;
+  color: var(--muted);
+  font: italic 14px var(--serif);
+  padding: 20px;
+}
+[data-theme='dark'] .sidebar {
+  background: #19191c;
+}
+[data-theme='dark'] .workspace-topbar {
+  background: #19191c;
+}
+[data-theme='dark'] .nav-item.active {
+  background: #303034;
+  box-shadow: inset 3px 0 #f5ad5b;
+}
+[data-theme='dark'] .opportunity-card:hover {
+  border-color: #696970;
+}
+[data-theme='dark'] .tag.beginner,
+[data-theme='dark'] .tag.skill {
+  background: #2c2823;
+  color: #efc997;
+  border-color: #4c4032;
+}
+[data-theme='dark'] .tag.intermediate,
+[data-theme='dark'] .tag.assigned {
+  background: #372f1c;
+  color: #ead392;
+  border-color: #51452b;
+}
+[data-theme='dark'] .tag.advanced {
+  background: #39261e;
+  color: #f0bfa4;
+  border-color: #5a3c2e;
+}
+[data-theme='dark'] .alert.error {
+  background: #35221f;
+  color: #f4b9a9;
+  border-color: #634137;
+}
+[data-theme='dark'] .alert.success {
+  background: #242427;
+  color: #e2e2e7;
+}
+[data-theme='dark'] .alert.neutral {
+  background: #332f1e;
+  color: #e4dba6;
+}
+[data-theme='dark'] .danger-text {
+  color: #f0afa0;
+}
+[data-theme='dark'] .skeleton {
+  background: #2d2d32;
+}
+[data-theme='dark'] .loader {
+  border-color: #45454c;
+  border-top-color: #f5ad5b;
+}
+[data-theme='dark'] .dropzone:hover,
+[data-theme='dark'] .dropzone.dragging {
+  border-color: #f5ad5b;
+}
+[data-theme='dark'] .contribute-card .fine-print {
+  color: var(--muted);
+}
+[data-theme='dark'] .brand-dot,
+[data-theme='dark'] .hero h1 em,
+[data-theme='dark'] .section-heading h2 em,
+[data-theme='dark'] .sign-in-benefits svg,
+[data-theme='dark'] .sign-in-symbol,
+[data-theme='dark'] .sign-in-orbit > svg {
+  color: #f5ad5b;
+}
+[data-theme='dark'] .hero-copy > p,
+[data-theme='dark'] .hero-kicker,
+[data-theme='dark'] .hero-reassurance,
+[data-theme='dark'] .hero-bottom,
+[data-theme='dark'] .hero-secondary,
+[data-theme='dark'] .orbit-core > span,
+[data-theme='dark'] .orbit-node,
+[data-theme='dark'] .orbit-node svg,
+[data-theme='dark'] .react-symbol {
+  color: #c4c4cd;
+}
+[data-theme='dark'] .orbit-core,
+[data-theme='dark'] .orbit-node {
+  background: #242427;
+  border-color: #414147;
+  box-shadow: 0 10px 40px #00000025;
+}
+[data-theme='dark'] .orbit-core svg {
+  color: #f5ad5b;
+}
+[data-theme='dark'] .orbit-ring,
+[data-theme='dark'] .orbit-axis {
+  border-color: #48484f;
+}
+[data-theme='dark'] .orbit-grid {
+  background-image: radial-gradient(#ffffff24 0.8px, transparent 0.8px);
+}
+[data-theme='dark'] .orbital-dot {
+  background: #f5ad5b;
+  box-shadow: 0 0 0 5px #f5ad5b15;
+}
+[data-theme='dark'] .node-pr {
+  background: #f5ad5b;
+  color: #141416;
+}
+[data-theme='dark'] .node-pr svg {
+  color: #141416;
+}
+[data-theme='dark'] .button.lime:hover {
+  background: #ffc789;
+}
+[data-theme='dark'] .callout-orbits,
+[data-theme='dark'] .callout-orbits::before,
+[data-theme='dark'] .callout-orbits::after {
+  border-color: #4b4b52;
+}
+[data-theme='dark'] .status-dot,
+[data-theme='dark'] .match-dot,
+[data-theme='dark'] .weight-row i,
+[data-theme='dark'] .small-line {
+  background: #f5ad5b;
+}
+[data-theme='dark'] .contribute-card,
+[data-theme='dark'] .contribute-card h2,
+[data-theme='dark'] .guidelines-link {
+  color: var(--ink);
+}
+[data-theme='dark'] button:focus-visible,
+[data-theme='dark'] a:focus-visible,
+[data-theme='dark'] input:focus-visible,
+[data-theme='dark'] select:focus-visible,
+[data-theme='dark'] summary:focus-visible {
+  outline-color: #f5ad5b;
+}
+@media (max-width: 640px) {
+  .header-actions {
+    gap: 8px;
+  }
+  .theme-toggle {
+    width: 36px;
+    height: 36px;
+  }
+  .account-name {
+    display: none;
+  }
+  .account-control {
+    gap: 6px;
+  }
+  .workspace-topbar {
+    gap: 10px;
+  }
+  .breadcrumb {
+    gap: 8px;
+  }
+  .landing-header .header-actions {
+    margin-left: auto;
+  }
+  .sign-in-header {
+    padding: 24px;
+  }
+  .sign-in-card {
+    padding: 29px 24px;
+  }
+  .sign-in-card h1 {
+    font-size: 38px;
+  }
+}

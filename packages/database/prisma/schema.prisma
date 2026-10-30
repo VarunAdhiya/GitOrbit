@@ -76,7 +76,8 @@ model Skill {
 }
 model UserProfile {
   id                 String @id @default(uuid()) @db.Uuid
-  anonymousSessionId String @unique @map("anonymous_session_id")
+  anonymousSessionId String? @unique @map("anonymous_session_id")
+  authUserId         String? @unique @map("auth_user_id") @db.Uuid
   experienceLevel    String @default("unknown") @map("experience_level")
   experienceInferred Boolean @default(true) @map("experience_inferred")
   experienceSummary  String[] @default([]) @map("experience_summary")
@@ -84,7 +85,7 @@ model UserProfile {
   preferredLanguages String[] @default([]) @map("preferred_languages")
   desiredDifficulty  String @default("any") @map("desired_difficulty")
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  expiresAt          DateTime @map("expires_at") @db.Timestamptz(3)
+  expiresAt          DateTime? @map("expires_at") @db.Timestamptz(3)
   skills             ProfileSkill[]
   @@index([expiresAt])
   @@map("user_profiles")

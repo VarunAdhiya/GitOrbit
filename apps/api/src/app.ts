@@ -21,7 +21,14 @@ import {
 } from '@gitorbit/shared';
 import type { Env } from '../../../packages/shared/src/env.ts';
 import { ApiError } from './errors.ts';
-import { COOKIE_NAME, getProfile, saveProfile, serializeProfile } from './profiles.ts';
+import {
+  COOKIE_NAME,
+  getProfile,
+  saveProfile,
+  serializeProfile,
+  claimGuestProfile,
+} from './profiles.ts';
+import { authFactory, type AuthFactory } from './auth.ts';
 import {
   analyzeResume,
   analysisProfile,
@@ -39,6 +46,7 @@ type Dependencies = {
   queue?: Queue<JobPayload>;
   extract?: typeof extractPdf;
   analyze?: (text: string) => Promise<ResumeAnalysis>;
+  auth?: AuthFactory;
 };
 export function createApp({
   db,
@@ -48,6 +56,7 @@ export function createApp({
   queue,
   extract = extractPdf,
   analyze = (text) => analyzeResume(text, env),
+  auth = authFactory(env),
 }: Dependencies) {
   const app = express();
   app.disable('x-powered-by');
@@ -57,7 +66,7 @@ export function createApp({
     cors({
       origin: env.WEB_ORIGIN,
       credentials: true,
-      allowedHeaders: ['Content-Type', 'X-GitOrbit', 'X-Resume-Consent', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'X-GitOrbit', 'Authorization'],
     }),
   );
   const store = (prefix: string) =>
@@ -102,12 +111,59 @@ export function createApp({
     sameSite: 'lax' as const,
     path: '/api',
   };
+  app.get('/api/v1/auth/session', async (req, res) => {
+    const client = auth(req, res);
+    res.json({ configured: Boolean(client), user: client ? await client.getUser() : null });
+  });
+  app.post('/api/v1/auth/google', mutation, async (req, res) => {
+    const client = auth(req, res);
+    if (!client)
+      throw new ApiError(
+        503,
+        'AUTH_NOT_CONFIGURED',
+        'Google sign-in is not available yet. You can continue as a guest.',
+      );
+    res.json({ url: await client.start() });
+  });
+  app.get('/api/v1/auth/callback', async (req, res) => {
+    const code = z.string().min(1).max(4096).safeParse(req.query.code);
+    const client = auth(req, res);
+    if (!client || req.query.error || !code.success) {
+      res.redirect(303, `${env.WEB_ORIGIN}/sign-in?error=sign_in_failed`);
+      return;
+    }
+    try {
+      const user = await client.exchange(code.data);
+      await claimGuestProfile(db, req.cookies[COOKIE_NAME], user.id);
+      res.clearCookie(COOKIE_NAME, cookieOptions);
+      res.redirect(303, `${env.WEB_ORIGIN}/resume?auth=success`);
+    } catch {
+      logger.warn({ code: 'AUTH_CALLBACK_FAILED' }, 'Google sign-in callback could not complete');
+      res.redirect(303, `${env.WEB_ORIGIN}/sign-in?error=sign_in_failed`);
+    }
+  });
+  app.post('/api/v1/auth/sign-out', mutation, async (req, res) => {
+    await auth(req, res)?.signOut();
+    res.clearCookie(COOKIE_NAME, cookieOptions);
+    res.status(204).end();
+  });
+  app.use(
+    ['/api/v1/profiles', '/api/v1/resumes', '/api/v1/recommendations'],
+    async (req, res, next) => {
+      res.locals.authUser = (await auth(req, res)?.getUser()) || null;
+      if (!res.locals.authUser)
+        throw new ApiError(
+          401,
+          'AUTH_REQUIRED',
+          'Sign in to upload a resume, manage your profile, and get personalized recommendations.',
+        );
+      next();
+    },
+  );
   app.get('/api/v1/config', (_req, res) =>
     res.json({
       aiConfigured: Boolean(env.LLM_API_KEY),
-      aiProvider: env.LLM_PROVIDER_NAME,
-      profileTtlHours: env.PROFILE_TTL_HOURS,
-      maxPdfMb: 5,
+      maxPdfMb: MAX_PDF_BYTES / 1024 / 1024,
     }),
   );
   app.get('/api/v1/health', async (_req, res) => {
@@ -124,16 +180,38 @@ export function createApp({
   });
   app.get('/api/v1/profiles/:id', async (req, res) => {
     const id = req.params.id === 'current' ? undefined : z.string().uuid().parse(req.params.id);
-    res.json(serializeProfile(await getProfile(db, req.cookies[COOKIE_NAME], id)));
+    try {
+      res.json(
+        serializeProfile(
+          await getProfile(db, req.cookies[COOKIE_NAME], id, res.locals.authUser?.id),
+        ),
+      );
+    } catch (error) {
+      if (
+        !id &&
+        error instanceof ApiError &&
+        ['PROFILE_REQUIRED', 'PROFILE_NOT_FOUND'].includes(error.code)
+      ) {
+        res.json(null);
+        return;
+      }
+      throw error;
+    }
   });
   app.post('/api/v1/profiles', mutation, async (req, res) => {
     const input = profileInputSchema.parse(req.body);
     const result = await saveProfile(
       db,
       { ...input, skills: input.skills.map((s) => ({ ...s, source: 'user', confidence: 1 })) },
-      { token: req.cookies[COOKIE_NAME], ttlHours: env.PROFILE_TTL_HOURS },
+      {
+        token: req.cookies[COOKIE_NAME],
+        authUserId: res.locals.authUser?.id,
+        ttlHours: env.PROFILE_TTL_HOURS,
+      },
     );
-    res.cookie(COOKIE_NAME, result.token, cookieOptions).status(201).json(result.profile);
+    if (result.token) res.cookie(COOKIE_NAME, result.token, cookieOptions);
+    else res.clearCookie(COOKIE_NAME, cookieOptions);
+    res.status(201).json(result.profile);
   });
   app.patch('/api/v1/profiles/:id', mutation, async (req, res) => {
     const id = z.string().uuid().parse(req.params.id);
@@ -141,7 +219,12 @@ export function createApp({
     const result = await saveProfile(
       db,
       { ...input, skills: input.skills.map((s) => ({ ...s, source: 'user', confidence: 1 })) },
-      { token: req.cookies[COOKIE_NAME], id, ttlHours: env.PROFILE_TTL_HOURS },
+      {
+        token: req.cookies[COOKIE_NAME],
+        authUserId: res.locals.authUser?.id,
+        id,
+        ttlHours: env.PROFILE_TTL_HOURS,
+      },
     );
     res.json(result.profile);
   });
@@ -150,6 +233,7 @@ export function createApp({
       db,
       req.cookies[COOKIE_NAME],
       z.string().uuid().parse(req.params.id),
+      res.locals.authUser?.id,
     );
     await db.userProfile.delete({ where: { id: profile.id } });
     res.clearCookie(COOKIE_NAME, cookieOptions).status(204).end();
@@ -174,15 +258,7 @@ export function createApp({
       legacyHeaders: false,
       message: limitMessage,
     }),
-    (req, _res, next) => {
-      if (req.get('X-Resume-Consent') !== 'true')
-        return next(
-          new ApiError(
-            400,
-            'CONSENT_REQUIRED',
-            'Consent is required before sending resume text to the AI provider.',
-          ),
-        );
+    (_req, _res, next) => {
       if (!env.LLM_API_KEY)
         return next(
           new ApiError(
@@ -223,11 +299,14 @@ export function createApp({
         const analysis = await analyze(text);
         const result = await saveProfile(db, analysisProfile(analysis), {
           token: req.cookies[COOKIE_NAME],
+          authUserId: res.locals.authUser?.id,
           ttlHours: env.PROFILE_TTL_HOURS,
           inferred: true,
           experienceSummary: analysis.experienceSummary,
         });
-        res.cookie(COOKIE_NAME, result.token, cookieOptions).status(201).json(result.profile);
+        if (result.token) res.cookie(COOKIE_NAME, result.token, cookieOptions);
+        else res.clearCookie(COOKIE_NAME, cookieOptions);
+        res.status(201).json(result.profile);
       } finally {
         req.file.buffer.fill(0);
         if (acquired) await redis?.zrem('gitorbit:resume-slots', lease).catch(() => {});
@@ -236,7 +315,7 @@ export function createApp({
   );
   app.get('/api/v1/opportunities/facets', async (_req, res) => {
     const where = opportunityWhere(filtersSchema.parse({}), env.STALE_HOURS);
-    const [repos, programs, total, latest, skills] = await Promise.all([
+    const [repos, programs, total, latest, skills, languages] = await Promise.all([
       db.repository.findMany({
         where: { issues: { some: where } },
         select: { id: true, name: true, owner: true, languages: true },
@@ -260,9 +339,16 @@ export function createApp({
         take: 1000,
         orderBy: { updatedAtSource: 'desc' },
       }),
+      db.repository.groupBy({
+        by: ['primaryLanguage'],
+        where: { issues: { some: where }, primaryLanguage: { not: null } },
+        orderBy: { primaryLanguage: 'asc' },
+      }),
     ]);
     res.json({
-      languages: [...new Set(repos.flatMap((r) => r.languages))].sort(),
+      languages: languages
+        .map((r) => r.primaryLanguage)
+        .filter((language): language is string => Boolean(language)),
       skills: [...new Set(skills.flatMap((i) => i.relevantSkills))].sort(),
       programs,
       repositories: repos.map(({ languages: _l, ...r }) => r),
@@ -299,7 +385,9 @@ export function createApp({
     );
   });
   app.get('/api/v1/recommendations', async (req, res) => {
-    const profile = serializeProfile(await getProfile(db, req.cookies[COOKIE_NAME]));
+    const profile = serializeProfile(
+      await getProfile(db, req.cookies[COOKIE_NAME], undefined, res.locals.authUser?.id),
+    );
     res.json(
       validateResponse(
         opportunityPageSchema,
@@ -363,6 +451,8 @@ export function createApp({
       return;
     }
     if (error instanceof ApiError) {
+      if (error.code.startsWith('AI_'))
+        logger.warn({ code: error.code, ...error.diagnostics }, 'Resume analysis failed');
       res.status(error.status).json({ error: { code: error.code, message: error.message } });
       return;
     }
@@ -373,7 +463,18 @@ export function createApp({
       return;
     }
     // Never log request bodies, cookies, filenames, provider responses or Prisma query arguments.
-    logger.error({ errorType: error instanceof Error ? error.name : 'unknown' }, 'Request failed');
+    logger.error(
+      {
+        errorType: error instanceof Error ? error.name : 'unknown',
+        ...(error instanceof Error &&
+        'code' in error &&
+        typeof error.code === 'string' &&
+        /^P\d{4}$/.test(error.code)
+          ? { errorCode: error.code }
+          : {}),
+      },
+      'Request failed',
+    );
     res.status(503).json({
       error: {
         code: 'SERVICE_UNAVAILABLE',
